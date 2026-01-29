@@ -74,18 +74,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const login = async (email: string) => {
-    // Para simplificar esta integración, usaremos OTP (One-Time Password)
-    const { error } = await supabase.auth.signInWithOtp({ email });
-    if (error) throw error;
-    alert('Se ha enviado un enlace de acceso a tu correo.');
+  const login = async (email: string, password?: string) => {
+    if (password) {
+      // Login con contraseña
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      if (error) throw error;
+    } else {
+      // Fallback a OTP si no hay contraseña (opcional)
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+      alert('Se ha enviado un enlace de acceso a tu correo.');
+    }
   };
 
-  const register = async (data: { firstName: string; lastName: string; email: string }) => {
+  const register = async (data: { firstName: string; lastName: string; email: string; password?: string }) => {
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
-      password: 'password-generado-provisional',
+      password: data.password || 'password-generado-provisional',
       options: {
+        emailRedirectTo: window.location.origin,
         data: {
           first_name: data.firstName,
           last_name: data.lastName,

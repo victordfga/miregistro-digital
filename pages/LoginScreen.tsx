@@ -87,10 +87,11 @@ const LoginScreen: React.FC = () => {
           await register({
             firstName: formData.firstName,
             lastName: formData.lastName,
-            email: formData.email
+            email: formData.email,
+            password: formData.password
           });
         } else {
-          await login(formData.email);
+          await login(formData.email, formData.password);
         }
 
         // Solo navegamos si no hubo error
