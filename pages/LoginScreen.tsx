@@ -206,7 +206,7 @@ const LoginScreen: React.FC = () => {
             </div>
           </div>
           <div className="relative z-10 p-8 text-xs text-slate-400 border-t border-white/10 flex justify-between">
-            <span>© 2024 MiRegistro Medico Digital</span>
+            <span>© 2026 MiRegistro Medico Digital</span>
             <span>Privacidad y Términos</span>
           </div>
         </div>
