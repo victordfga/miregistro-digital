@@ -298,11 +298,10 @@ const LoginScreen: React.FC = () => {
                       <span
                         role="button"
                         tabIndex={0}
-                        onClick={(e) => {
+                        onClickCapture={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          window.alert("DEBUG CHIVATO: Click detectado en el SPAN");
-                          console.log("Recovery span clicked");
+                          console.log("Recovery span clicked (Capture phase)");
                           setIsRecovery(true);
                           setAuthError(null);
                         }}
@@ -315,7 +314,7 @@ const LoginScreen: React.FC = () => {
                         }}
                         className="text-xs font-bold text-primary hover:underline focus:outline-none cursor-pointer select-none"
                       >
-                        ¿Olvidaste tu contraseña?
+                        Recuperar Contraseña
                       </span>
                     )}
                   </div>
