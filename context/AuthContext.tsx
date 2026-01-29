@@ -8,13 +8,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [recoveringPassword, setRecoveringPassword] = useState(() =>
+    window.location.hash.includes('type=recovery')
+  );
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
-        // Forzar redirección explícita al detectar el evento de recuperación
+        setRecoveringPassword(false);
+        // Pequeño timeout para asegurar que el router esté listo si fuera necesario, 
+        // pero principalmente cambiamos el hash para navegar.
         window.location.hash = '/update-password';
         return;
+      }
+
+      // Si ocurre cualquier otro evento inicial y estábamos esperando recuperación, liberamos
+      if (recoveringPassword && (event === 'SIGNED_IN' || event === 'SIGNED_OUT')) {
+        // Si es SIGNED_IN pero tenemos el hash recovery, Supabase disparará PASSWORD_RECOVERY después normalmente.
+        // Pero por seguridad, si pasa mucho tiempo, podríamos liberarlo.
+        // Dejaremos que PASSWORD_RECOVERY mande.
       }
 
       if (session?.user) {
@@ -378,6 +390,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setAppointments(prev => prev.filter(app => app.id !== appointmentId));
     }
   };
+
+  if (recoveringPassword) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-300 font-medium">Verificando enlace de recuperación...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={{
