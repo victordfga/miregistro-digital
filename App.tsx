@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import LandingPage from './pages/LandingPage';
 import LoginScreen from './pages/LoginScreen';
+import UpdatePassword from './pages/UpdatePassword';
 import Dashboard from './pages/Dashboard';
 import FamilyScreen from './pages/FamilyScreen';
 import MemberProfile from './pages/MemberProfile';
@@ -18,6 +19,7 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginScreen />} />
+          <Route path="/update-password" element={<UpdatePassword />} />
 
           {/* Ruta independiente para impresión limpia */}
           <Route path="/history/:id" element={<ClinicalHistory />} />

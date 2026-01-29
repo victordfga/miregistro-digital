@@ -1,3 +1,3 @@
-Versión de Despliegue: v1.1
-Fix: Autenticación con contraseña forzada.
+Versión de Despliegue: v1.2
+Fix: Implementada funcionalidad completa de recuperación de contraseña.
 Fecha: 2026-01-29

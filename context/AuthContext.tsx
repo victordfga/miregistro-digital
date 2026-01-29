@@ -141,6 +141,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await supabase.auth.signOut();
   };
 
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/#/update-password`,
+    });
+    if (error) throw error;
+  };
+
+  const updatePassword = async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+  };
+
   const addFamilyMember = async (member: Omit<FamilyMember, 'id' | 'status'>) => {
     if (!user) return;
     const { data, error } = await supabase
@@ -367,7 +379,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addFamilyMember, updateFamilyMember, updateMemberPhoto,
       addMedication, updateMedication, deleteMedication,
       addVaccine, updateVaccine, deleteVaccine,
-      addAppointment, updateAppointment, deleteAppointment
+      addAppointment, updateAppointment, deleteAppointment,
+      resetPassword, updatePassword
     }}>
       {children}
     </AuthContext.Provider>

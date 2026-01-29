@@ -6,11 +6,11 @@ import { Stethoscope, Activity, CheckCircle, Mail, Lock, Eye, EyeOff, ArrowRight
 const LoginScreen: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, register } = useAuth();
-
   // Determinar si empezamos en modo registro o login según lo que venga de la Landing
   const [isRegister, setIsRegister] = useState(true);
+  const [isRecovery, setIsRecovery] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const { login, register, resetPassword } = useAuth();
 
   useEffect(() => {
     // Si viene un modo específico en el estado de la navegación, lo aplicamos
@@ -80,6 +80,25 @@ const LoginScreen: React.FC = () => {
     e.preventDefault();
     setAuthError(null);
 
+    // Validación para recuperación
+    if (isRecovery) {
+      if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+        setAuthError("Ingresa un correo válido.");
+        return;
+      }
+      setLoading(true);
+      try {
+        await resetPassword(formData.email);
+        alert("Si el correo existe, recibirás un enlace para restablecer tu contraseña.");
+        setIsRecovery(false); // Volver al login
+      } catch (err: any) {
+        setAuthError(err.message || "Error al enviar correo.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (validateForm()) {
       setLoading(true);
       try {
@@ -95,7 +114,6 @@ const LoginScreen: React.FC = () => {
         }
 
         // Solo navegamos si no hubo error
-        // Nota: El onAuthStateChange en el contexto se encargará de detectar la sesión activa.
         navigate('/dashboard');
       } catch (err: any) {
         console.error("Error de autenticación:", err);
@@ -225,7 +243,7 @@ const LoginScreen: React.FC = () => {
             </div>
 
             <form className="space-y-5" onSubmit={handleSubmit} noValidate>
-              {isRegister && (
+              {isRegister && !isRecovery && (
                 <div className="flex flex-col sm:flex-row gap-5 animate-in fade-in slide-in-from-top-4 duration-300">
                   <div className="flex-1 space-y-2">
                     <label className="text-slate-900 dark:text-slate-200 text-sm font-semibold" htmlFor="firstName">Nombre</label>
@@ -272,53 +290,61 @@ const LoginScreen: React.FC = () => {
                 {errors.email && <span className="text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.email}</span>}
               </div>
 
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-slate-900 dark:text-slate-200 text-sm font-semibold" htmlFor="password">Contraseña</label>
-                  {!isRegister && (
-                    <a href="#" className="text-xs font-bold text-primary hover:underline">¿Olvidaste tu contraseña?</a>
+              {!isRecovery && (
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-slate-900 dark:text-slate-200 text-sm font-semibold" htmlFor="password">Contraseña</label>
+                    {!isRegister && (
+                      <button
+                        type="button"
+                        onClick={() => { setIsRecovery(true); setAuthError(null); }}
+                        className="text-xs font-bold text-primary hover:underline focus:outline-none"
+                      >
+                        ¿Olvidaste tu contraseña?
+                      </button>
+                    )}
+                  </div>
+                  <div className="relative group">
+                    <span className="absolute left-4 top-3.5 text-slate-400">
+                      <Lock className="w-5 h-5" />
+                    </span>
+                    <input
+                      className={`w-full h-12 pl-11 pr-11 rounded-lg border ${errors.password ? 'border-red-500 focus:border-red-500' : 'border-slate-300 dark:border-slate-700 focus:border-primary'} bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary/20 transition-all outline-none`}
+                      id="password"
+                      placeholder={isRegister ? "Mínimo 8 caracteres" : "Ingresa tu contraseña"}
+                      type={showPassword ? "text" : "password"}
+                      value={formData.password}
+                      onChange={handleInputChange}
+                    />
+                    <button
+                      className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer p-1"
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+
+                  {errors.password && <span className="text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.password}</span>}
+
+                  {isRegister && (
+                    <>
+                      <div className="flex gap-1 h-1 mt-2">
+                        <div className={`flex-1 rounded-full transition-colors ${formData.password.length > 0 ? 'bg-red-500' : 'bg-slate-200 dark:bg-slate-700'}`}></div>
+                        <div className={`flex-1 rounded-full transition-colors ${formData.password.length > 4 ? 'bg-orange-500' : 'bg-slate-200 dark:bg-slate-700'}`}></div>
+                        <div className={`flex-1 rounded-full transition-colors ${formData.password.length > 7 ? 'bg-yellow-500' : 'bg-slate-200 dark:bg-slate-700'}`}></div>
+                        <div className={`flex-1 rounded-full transition-colors ${formData.password.length > 9 ? 'bg-green-500' : 'bg-slate-200 dark:bg-slate-700'}`}></div>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        Asegúrate de que tenga al menos 8 caracteres, incluyendo un número y un símbolo.
+                      </p>
+                    </>
                   )}
                 </div>
-                <div className="relative group">
-                  <span className="absolute left-4 top-3.5 text-slate-400">
-                    <Lock className="w-5 h-5" />
-                  </span>
-                  <input
-                    className={`w-full h-12 pl-11 pr-11 rounded-lg border ${errors.password ? 'border-red-500 focus:border-red-500' : 'border-slate-300 dark:border-slate-700 focus:border-primary'} bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary/20 transition-all outline-none`}
-                    id="password"
-                    placeholder={isRegister ? "Mínimo 8 caracteres" : "Ingresa tu contraseña"}
-                    type={showPassword ? "text" : "password"}
-                    value={formData.password}
-                    onChange={handleInputChange}
-                  />
-                  <button
-                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer p-1"
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
+              )}
 
-                {errors.password && <span className="text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.password}</span>}
-
-                {isRegister && (
-                  <>
-                    <div className="flex gap-1 h-1 mt-2">
-                      <div className={`flex-1 rounded-full transition-colors ${formData.password.length > 0 ? 'bg-red-500' : 'bg-slate-200 dark:bg-slate-700'}`}></div>
-                      <div className={`flex-1 rounded-full transition-colors ${formData.password.length > 4 ? 'bg-orange-500' : 'bg-slate-200 dark:bg-slate-700'}`}></div>
-                      <div className={`flex-1 rounded-full transition-colors ${formData.password.length > 7 ? 'bg-yellow-500' : 'bg-slate-200 dark:bg-slate-700'}`}></div>
-                      <div className={`flex-1 rounded-full transition-colors ${formData.password.length > 9 ? 'bg-green-500' : 'bg-slate-200 dark:bg-slate-700'}`}></div>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Asegúrate de que tenga al menos 8 caracteres, incluyendo un número y un símbolo.
-                    </p>
-                  </>
-                )}
-              </div>
-
-              {isRegister && (
+              {isRegister && !isRecovery && (
                 <div className="space-y-3 pt-2 animate-in fade-in duration-300">
                   <label className="flex items-start gap-3 cursor-pointer group">
                     <div className="relative flex items-center">
@@ -350,11 +376,21 @@ const LoginScreen: React.FC = () => {
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 ) : (
                   <>
-                    {isRegister ? "Crear Cuenta" : "Iniciar Sesión"}
+                    {isRecovery ? "Enviar correo de recuperación" : (isRegister ? "Crear Cuenta" : "Iniciar Sesión")}
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
+
+              {isRecovery && (
+                <button
+                  type="button"
+                  onClick={() => setIsRecovery(false)}
+                  className="w-full h-10 mt-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 text-sm font-semibold transition-colors"
+                >
+                  Volver al inicio de sesión
+                </button>
+              )}
             </form>
 
             <div className="relative my-8">
