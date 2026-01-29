@@ -295,19 +295,27 @@ const LoginScreen: React.FC = () => {
                   <div className="flex justify-between items-center">
                     <label className="text-slate-900 dark:text-slate-200 text-sm font-semibold" htmlFor="password">Contraseña</label>
                     {!isRegister && (
-                      <button
-                        type="button"
+                      <span
+                        role="button"
+                        tabIndex={0}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          console.log("Recovery button clicked - Preventing default");
+                          console.log("Recovery span clicked");
                           setIsRecovery(true);
                           setAuthError(null);
                         }}
-                        className="text-xs font-bold text-primary hover:underline focus:outline-none"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setIsRecovery(true);
+                            setAuthError(null);
+                          }
+                        }}
+                        className="text-xs font-bold text-primary hover:underline focus:outline-none cursor-pointer select-none"
                       >
                         ¿Olvidaste tu contraseña?
-                      </button>
+                      </span>
                     )}
                   </div>
                   <div className="relative group">
