@@ -11,6 +11,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        // Forzar redirección explícita al detectar el evento de recuperación
+        window.location.hash = '/update-password';
+        return;
+      }
+
       if (session?.user) {
         const { data: profile } = await supabase
           .from('profiles')
