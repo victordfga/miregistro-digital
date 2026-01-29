@@ -297,7 +297,7 @@ const LoginScreen: React.FC = () => {
                     {!isRegister && (
                       <button
                         type="button"
-                        onClick={() => { setIsRecovery(true); setAuthError(null); }}
+                        onClick={(e) => { e.preventDefault(); setIsRecovery(true); setAuthError(null); }}
                         className="text-xs font-bold text-primary hover:underline focus:outline-none"
                       >
                         ¿Olvidaste tu contraseña?
@@ -360,7 +360,7 @@ const LoginScreen: React.FC = () => {
                       </span>
                     </div>
                     <span className="text-sm text-slate-600 dark:text-slate-300 leading-tight pt-0.5">
-                      Acepto los <a className="text-primary hover:underline font-semibold" href="#">Términos de Servicio</a> y la <a className="text-primary hover:underline font-semibold" href="#">Política de Privacidad</a>.
+                      Acepto los <button type="button" className="text-primary hover:underline font-semibold bg-transparent border-none cursor-pointer p-0 inline" onClick={(e) => e.preventDefault()}>Términos de Servicio</button> y la <button type="button" className="text-primary hover:underline font-semibold bg-transparent border-none cursor-pointer p-0 inline" onClick={(e) => e.preventDefault()}>Política de Privacidad</button>.
                     </span>
                   </label>
                   {errors.agreedToTerms && <span className="text-xs text-red-500 flex items-center gap-1 block ml-8 mt-1"><AlertCircle className="w-3 h-3" /> {errors.agreedToTerms}</span>}
