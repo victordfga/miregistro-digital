@@ -301,6 +301,7 @@ const LoginScreen: React.FC = () => {
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
+                          window.alert("DEBUG CHIVATO: Click detectado en el SPAN");
                           console.log("Recovery span clicked");
                           setIsRecovery(true);
                           setAuthError(null);
