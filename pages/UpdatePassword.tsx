@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../supabase';
 import { Lock, Eye, EyeOff, Save, ShieldCheck, AlertCircle } from 'lucide-react';
 
 const UpdatePassword = () => {
@@ -10,7 +11,43 @@ const UpdatePassword = () => {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [restoringSession, setRestoringSession] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // Restaurar sesión desde el hash guardado por index.tsx
+    useEffect(() => {
+        const restoreSession = async () => {
+            const savedHash = sessionStorage.getItem('supabase_recovery_hash');
+            if (savedHash) {
+                console.log('[UpdatePassword] Restaurando sesión desde hash guardado');
+                sessionStorage.removeItem('supabase_recovery_hash'); // Limpiar después de usar
+
+                // Extraer tokens del hash
+                const hashParams = new URLSearchParams(savedHash.slice(1)); // Remover el '#' inicial
+                const accessToken = hashParams.get('access_token');
+                const refreshToken = hashParams.get('refresh_token');
+
+                if (accessToken) {
+                    try {
+                        const { error } = await supabase.auth.setSession({
+                            access_token: accessToken,
+                            refresh_token: refreshToken || ''
+                        });
+                        if (error) {
+                            console.error('[UpdatePassword] Error al restaurar sesión:', error);
+                            setError('El enlace de recuperación ha expirado. Por favor solicita uno nuevo.');
+                        }
+                    } catch (err) {
+                        console.error('[UpdatePassword] Excepción al restaurar sesión:', err);
+                        setError('Error al verificar el enlace de recuperación.');
+                    }
+                }
+            }
+            setRestoringSession(false);
+        };
+
+        restoreSession();
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -38,6 +75,17 @@ const UpdatePassword = () => {
             setLoading(false);
         }
     };
+
+    if (restoringSession) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 px-4">
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-slate-600 dark:text-slate-300 font-medium">Verificando enlace de recuperación...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 px-4">
