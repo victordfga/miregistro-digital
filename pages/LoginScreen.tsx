@@ -297,7 +297,13 @@ const LoginScreen: React.FC = () => {
                     {!isRegister && (
                       <button
                         type="button"
-                        onClick={(e) => { e.preventDefault(); setIsRecovery(true); setAuthError(null); }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log("Recovery button clicked - Preventing default");
+                          setIsRecovery(true);
+                          setAuthError(null);
+                        }}
                         className="text-xs font-bold text-primary hover:underline focus:outline-none"
                       >
                         ¿Olvidaste tu contraseña?
