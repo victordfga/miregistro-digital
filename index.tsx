@@ -33,21 +33,21 @@ if (hasRecoveryTokens) {
   sessionStorage.setItem('supabase_recovery_url', fullUrl);
   sessionStorage.setItem('supabase_recovery_hash', hash || search);
 
-  // Limpiar la URL y redirigir a la ruta de actualización de contraseña
-  window.location.replace(window.location.origin + window.location.pathname + '#/update-password');
+  // Cambiar el hash ANTES de montar React para que HashRouter lo detecte correctamente
+  window.history.replaceState(null, '', window.location.origin + window.location.pathname + '#/update-password');
 
-  // Detener la ejecución aquí - el navegador recargará con la nueva URL
-} else {
-  // Flujo normal: montar la aplicación React
-  const rootElement = document.getElementById('root');
-  if (!rootElement) {
-    throw new Error("Could not find root element to mount to");
-  }
-
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
+  console.log('[Recovery Interceptor] Hash cambiado a #/update-password, montando React...');
 }
+
+// SIEMPRE montar React - el componente UpdatePassword manejará la restauración de sesión
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
+
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
