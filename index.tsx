@@ -10,17 +10,30 @@ import App from './App';
 // Esto causa un conflicto. Debemos interceptar ANTES de que React se monte.
 // ============================================================================
 
+const fullUrl = window.location.href;
 const hash = window.location.hash;
+const search = window.location.search;
+
+console.log('[Recovery Interceptor] URL completa:', fullUrl);
+
+// Detectar tokens de Supabase en CUALQUIER parte de la URL
+const hasRecoveryTokens =
+  fullUrl.includes('access_token=') ||
+  fullUrl.includes('type=recovery') ||
+  hash.includes('access_token=') ||
+  hash.includes('type=recovery') ||
+  search.includes('access_token=') ||
+  search.includes('type=recovery');
 
 // Detectar si es un enlace de recuperación de Supabase
-if (hash && (hash.includes('access_token=') || hash.includes('type=recovery'))) {
-  console.log('[Recovery Interceptor] Detectado enlace de recuperación de Supabase');
+if (hasRecoveryTokens) {
+  console.log('[Recovery Interceptor] ¡DETECTADO enlace de recuperación!');
 
-  // Guardar el hash completo en sessionStorage para que Supabase lo procese
-  sessionStorage.setItem('supabase_recovery_hash', hash);
+  // Guardar la URL completa para procesamiento posterior
+  sessionStorage.setItem('supabase_recovery_url', fullUrl);
+  sessionStorage.setItem('supabase_recovery_hash', hash || search);
 
   // Limpiar la URL y redirigir a la ruta de actualización de contraseña
-  // Esto permite que HashRouter funcione correctamente
   window.location.replace(window.location.origin + window.location.pathname + '#/update-password');
 
   // Detener la ejecución aquí - el navegador recargará con la nueva URL

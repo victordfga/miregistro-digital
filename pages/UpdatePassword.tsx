@@ -17,15 +17,28 @@ const UpdatePassword = () => {
     // Restaurar sesión desde el hash guardado por index.tsx
     useEffect(() => {
         const restoreSession = async () => {
+            const savedUrl = sessionStorage.getItem('supabase_recovery_url');
             const savedHash = sessionStorage.getItem('supabase_recovery_hash');
-            if (savedHash) {
-                console.log('[UpdatePassword] Restaurando sesión desde hash guardado');
-                sessionStorage.removeItem('supabase_recovery_hash'); // Limpiar después de usar
 
-                // Extraer tokens del hash
-                const hashParams = new URLSearchParams(savedHash.slice(1)); // Remover el '#' inicial
-                const accessToken = hashParams.get('access_token');
-                const refreshToken = hashParams.get('refresh_token');
+            console.log('[UpdatePassword] savedUrl:', savedUrl);
+            console.log('[UpdatePassword] savedHash:', savedHash);
+
+            if (savedUrl || savedHash) {
+                console.log('[UpdatePassword] Restaurando sesión desde datos guardados');
+                sessionStorage.removeItem('supabase_recovery_url');
+                sessionStorage.removeItem('supabase_recovery_hash');
+
+                // Intentar extraer tokens de la URL completa primero, luego del hash
+                const sourceString = savedUrl || savedHash || '';
+
+                // Buscar access_token en cualquier formato
+                const accessTokenMatch = sourceString.match(/access_token=([^&]+)/);
+                const refreshTokenMatch = sourceString.match(/refresh_token=([^&]+)/);
+
+                const accessToken = accessTokenMatch ? accessTokenMatch[1] : null;
+                const refreshToken = refreshTokenMatch ? refreshTokenMatch[1] : null;
+
+                console.log('[UpdatePassword] Access token encontrado:', accessToken ? 'Sí' : 'No');
 
                 if (accessToken) {
                     try {
@@ -36,11 +49,15 @@ const UpdatePassword = () => {
                         if (error) {
                             console.error('[UpdatePassword] Error al restaurar sesión:', error);
                             setError('El enlace de recuperación ha expirado. Por favor solicita uno nuevo.');
+                        } else {
+                            console.log('[UpdatePassword] Sesión restaurada exitosamente');
                         }
                     } catch (err) {
                         console.error('[UpdatePassword] Excepción al restaurar sesión:', err);
                         setError('Error al verificar el enlace de recuperación.');
                     }
+                } else {
+                    console.warn('[UpdatePassword] No se encontró access_token');
                 }
             }
             setRestoringSession(false);
