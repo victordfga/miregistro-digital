@@ -13,10 +13,27 @@ const UpdatePassword = () => {
     const [loading, setLoading] = useState(false);
     const [restoringSession, setRestoringSession] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [sessionReady, setSessionReady] = useState(false);
 
-    // Restaurar sesión desde el hash guardado por index.tsx
+    // Restaurar sesión desde el hash guardado por index.tsx o verificar sesión existente
     useEffect(() => {
+        let mounted = true;
+
         const restoreSession = async () => {
+            console.log('[UpdatePassword] Iniciando restauración de sesión...');
+
+            // Primero verificar si ya hay una sesión activa (por si Supabase ya la procesó)
+            const { data: { session: existingSession } } = await supabase.auth.getSession();
+            if (existingSession) {
+                console.log('[UpdatePassword] Sesión existente detectada');
+                if (mounted) {
+                    setSessionReady(true);
+                    setRestoringSession(false);
+                }
+                return;
+            }
+
+            // Intentar restaurar desde sessionStorage
             const savedUrl = sessionStorage.getItem('supabase_recovery_url');
             const savedHash = sessionStorage.getItem('supabase_recovery_hash');
 
@@ -28,42 +45,64 @@ const UpdatePassword = () => {
                 sessionStorage.removeItem('supabase_recovery_url');
                 sessionStorage.removeItem('supabase_recovery_hash');
 
-                // Intentar extraer tokens de la URL completa primero, luego del hash
                 const sourceString = savedUrl || savedHash || '';
 
-                // Buscar access_token en cualquier formato
-                const accessTokenMatch = sourceString.match(/access_token=([^&]+)/);
-                const refreshTokenMatch = sourceString.match(/refresh_token=([^&]+)/);
+                // Buscar access_token y refresh_token
+                const accessTokenMatch = sourceString.match(/access_token=([^&#]+)/);
+                const refreshTokenMatch = sourceString.match(/refresh_token=([^&#]+)/);
 
                 const accessToken = accessTokenMatch ? accessTokenMatch[1] : null;
                 const refreshToken = refreshTokenMatch ? refreshTokenMatch[1] : null;
 
                 console.log('[UpdatePassword] Access token encontrado:', accessToken ? 'Sí' : 'No');
+                console.log('[UpdatePassword] Refresh token encontrado:', refreshToken ? 'Sí' : 'No');
 
                 if (accessToken) {
                     try {
-                        const { error } = await supabase.auth.setSession({
+                        const { data, error } = await supabase.auth.setSession({
                             access_token: accessToken,
                             refresh_token: refreshToken || ''
                         });
                         if (error) {
                             console.error('[UpdatePassword] Error al restaurar sesión:', error);
-                            setError('El enlace de recuperación ha expirado. Por favor solicita uno nuevo.');
+                            if (mounted) setError('El enlace de recuperación ha expirado. Por favor solicita uno nuevo.');
                         } else {
-                            console.log('[UpdatePassword] Sesión restaurada exitosamente');
+                            console.log('[UpdatePassword] Sesión restaurada exitosamente:', data.session ? 'Sí' : 'No');
+                            if (mounted) setSessionReady(true);
                         }
                     } catch (err) {
                         console.error('[UpdatePassword] Excepción al restaurar sesión:', err);
-                        setError('Error al verificar el enlace de recuperación.');
+                        if (mounted) setError('Error al verificar el enlace de recuperación.');
                     }
                 } else {
-                    console.warn('[UpdatePassword] No se encontró access_token');
+                    console.warn('[UpdatePassword] No se encontró access_token en los datos guardados');
+                    // Mostrar formulario de todas formas, el usuario puede que tenga sesión por otro medio
+                    if (mounted) setSessionReady(true);
                 }
+            } else {
+                console.log('[UpdatePassword] No hay datos guardados en sessionStorage');
+                // Si no hay datos guardados, verificar si llegamos aquí por otro medio
+                if (mounted) setSessionReady(true);
             }
-            setRestoringSession(false);
+
+            if (mounted) setRestoringSession(false);
         };
 
+        // Timeout de seguridad: si después de 5 segundos no termina, mostrar el formulario
+        const timeoutId = setTimeout(() => {
+            console.warn('[UpdatePassword] Timeout alcanzado, mostrando formulario de todas formas');
+            if (mounted) {
+                setRestoringSession(false);
+                setSessionReady(true);
+            }
+        }, 5000);
+
         restoreSession();
+
+        return () => {
+            mounted = false;
+            clearTimeout(timeoutId);
+        };
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
