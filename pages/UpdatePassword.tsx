@@ -121,12 +121,38 @@ const UpdatePassword = () => {
         }
 
         setLoading(true);
+        console.log('[UpdatePassword] Iniciando actualización de contraseña...');
+
         try {
-            await updatePassword(password);
+            // Verificar que hay sesión activa antes de intentar actualizar
+            const { data: { session } } = await supabase.auth.getSession();
+            console.log('[UpdatePassword] Sesión actual:', session ? 'Activa' : 'No existe');
+
+            if (!session) {
+                setError("No hay sesión activa. El enlace de recuperación puede haber expirado. Por favor solicita uno nuevo.");
+                setLoading(false);
+                return;
+            }
+
+            // Llamar directamente a Supabase con timeout
+            const updatePromise = supabase.auth.updateUser({ password });
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout: La operación tardó demasiado')), 15000)
+            );
+
+            const { error: updateError } = await Promise.race([updatePromise, timeoutPromise]) as any;
+
+            if (updateError) {
+                console.error('[UpdatePassword] Error al actualizar:', updateError);
+                throw updateError;
+            }
+
+            console.log('[UpdatePassword] Contraseña actualizada exitosamente');
             alert("Contraseña actualizada con éxito.");
-            navigate('/dashboard');
+            navigate('/login');
         } catch (err: any) {
-            setError(err.message || "Error al actualizar contraseña.");
+            console.error('[UpdatePassword] Excepción:', err);
+            setError(err.message || "Error al actualizar contraseña. Intenta nuevamente.");
         } finally {
             setLoading(false);
         }
