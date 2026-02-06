@@ -9,53 +9,90 @@ const UpdatePassword = () => {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [checkingSession, setCheckingSession] = useState(true);
+    const [restoringSession, setRestoringSession] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [hasValidSession, setHasValidSession] = useState(false);
+    const [sessionReady, setSessionReady] = useState(false);
 
-    // Verificar si hay una sesión válida para actualizar contraseña
+    // Restaurar sesión usando los tokens guardados por el interceptor
     useEffect(() => {
         let mounted = true;
 
-        const checkSession = async () => {
-            console.log('[UpdatePassword] Verificando sesión...');
-
-            // Dar tiempo a Supabase para procesar los tokens del hash
-            await new Promise(resolve => setTimeout(resolve, 1000));
+        const restoreSession = async () => {
+            console.log('[UpdatePassword] Iniciando restauración de sesión...');
 
             try {
-                const { data: { session } } = await supabase.auth.getSession();
-
-                if (session) {
-                    console.log('[UpdatePassword] ✅ Sesión válida encontrada');
+                // Primero verificar si ya hay una sesión activa
+                const { data: { session: existingSession } } = await supabase.auth.getSession();
+                if (existingSession) {
+                    console.log('[UpdatePassword] ✅ Sesión existente detectada');
                     if (mounted) {
-                        setHasValidSession(true);
-                        setCheckingSession(false);
+                        setSessionReady(true);
+                        setRestoringSession(false);
+                    }
+                    return;
+                }
+
+                // Verificar si hay tokens guardados por el interceptor
+                const accessToken = sessionStorage.getItem('recovery_access_token');
+                const refreshToken = sessionStorage.getItem('recovery_refresh_token');
+                const pendingRecovery = sessionStorage.getItem('recovery_pending');
+
+                console.log('[UpdatePassword] Tokens guardados:', accessToken ? 'Sí' : 'No');
+
+                if (accessToken && pendingRecovery) {
+                    // Limpiar sessionStorage
+                    sessionStorage.removeItem('recovery_access_token');
+                    sessionStorage.removeItem('recovery_refresh_token');
+                    sessionStorage.removeItem('recovery_pending');
+
+                    console.log('[UpdatePassword] Restaurando sesión con tokens...');
+
+                    const { data, error: sessionError } = await supabase.auth.setSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken || ''
+                    });
+
+                    if (sessionError) {
+                        console.error('[UpdatePassword] Error al restaurar sesión:', sessionError);
+                        if (mounted) {
+                            setError('El enlace de recuperación ha expirado o es inválido. Por favor solicita uno nuevo.');
+                            setRestoringSession(false);
+                        }
+                        return;
+                    }
+
+                    if (data.session) {
+                        console.log('[UpdatePassword] ✅ Sesión restaurada exitosamente');
+                        if (mounted) {
+                            setSessionReady(true);
+                            setRestoringSession(false);
+                        }
+                        return;
+                    } else {
+                        console.error('[UpdatePassword] setSession no retornó sesión');
+                        if (mounted) {
+                            setError('No se pudo establecer la sesión. Por favor solicita un nuevo enlace.');
+                            setRestoringSession(false);
+                        }
+                        return;
                     }
                 } else {
-                    console.log('[UpdatePassword] ❌ No hay sesión activa');
-                    // Verificar si hay un flag de recuperación pendiente
-                    const pendingRecovery = sessionStorage.getItem('pending_password_recovery');
-                    if (pendingRecovery) {
-                        sessionStorage.removeItem('pending_password_recovery');
-                        console.log('[UpdatePassword] Había recuperación pendiente pero no se estableció sesión');
-                    }
-
+                    console.log('[UpdatePassword] No hay tokens de recuperación guardados');
                     if (mounted) {
-                        setError('No se encontró una sesión activa. Por favor solicita un nuevo enlace de recuperación.');
-                        setCheckingSession(false);
+                        setError('No se encontró información de recuperación. Por favor solicita un nuevo enlace.');
+                        setRestoringSession(false);
                     }
                 }
             } catch (err) {
-                console.error('[UpdatePassword] Error al verificar sesión:', err);
+                console.error('[UpdatePassword] Excepción:', err);
                 if (mounted) {
-                    setError('Error al verificar la sesión. Por favor intenta nuevamente.');
-                    setCheckingSession(false);
+                    setError('Error inesperado. Por favor intenta nuevamente.');
+                    setRestoringSession(false);
                 }
             }
         };
 
-        checkSession();
+        restoreSession();
 
         return () => {
             mounted = false;
@@ -82,6 +119,16 @@ const UpdatePassword = () => {
         console.log('[UpdatePassword] Actualizando contraseña...');
 
         try {
+            // Verificar sesión antes de actualizar
+            const { data: { session } } = await supabase.auth.getSession();
+            console.log('[UpdatePassword] Sesión actual:', session ? 'Activa' : 'No existe');
+
+            if (!session) {
+                setError("No hay sesión activa. Por favor solicita un nuevo enlace.");
+                setLoading(false);
+                return;
+            }
+
             const { error: updateError } = await supabase.auth.updateUser({ password });
 
             if (updateError) {
@@ -91,14 +138,14 @@ const UpdatePassword = () => {
 
             console.log('[UpdatePassword] ✅ Contraseña actualizada exitosamente');
 
-            // Cerrar sesión para que el usuario inicie con la nueva contraseña
+            // Cerrar sesión para que inicie con nueva contraseña
             await supabase.auth.signOut();
 
-            alert("¡Contraseña actualizada con éxito! Por favor inicia sesión con tu nueva contraseña.");
+            alert("¡Contraseña actualizada con éxito! Inicia sesión con tu nueva contraseña.");
             navigate('/login');
         } catch (err: any) {
             console.error('[UpdatePassword] Excepción:', err);
-            setError(err.message || "Error al actualizar contraseña. Intenta nuevamente.");
+            setError(err.message || "Error al actualizar contraseña.");
         } finally {
             setLoading(false);
         }
@@ -108,7 +155,7 @@ const UpdatePassword = () => {
         navigate('/login');
     };
 
-    if (checkingSession) {
+    if (restoringSession) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 px-4">
                 <div className="text-center">
@@ -121,7 +168,7 @@ const UpdatePassword = () => {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 px-4">
-            <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 transform transition-all">
+            <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8">
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 text-primary mb-4">
                         <ShieldCheck className="w-8 h-8" />
@@ -137,7 +184,7 @@ const UpdatePassword = () => {
                         <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                         <div>
                             <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-                            {!hasValidSession && (
+                            {!sessionReady && (
                                 <button
                                     onClick={handleBackToLogin}
                                     className="mt-2 text-sm text-red-600 dark:text-red-400 underline hover:no-underline"
@@ -149,7 +196,7 @@ const UpdatePassword = () => {
                     </div>
                 )}
 
-                {hasValidSession ? (
+                {sessionReady ? (
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="space-y-2">
                             <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Nueva Contraseña</label>
