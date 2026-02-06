@@ -14,8 +14,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       // Manejar evento de recuperación de contraseña navegando a la página de actualización
       if (event === 'PASSWORD_RECOVERY') {
-        console.log('[AuthContext] PASSWORD_RECOVERY detectado, navegando a update-password');
-        window.location.hash = '/update-password';
+        console.log('[AuthContext] PASSWORD_RECOVERY detectado, navegando a /update-password');
+        window.location.href = window.location.origin + '/update-password';
         return;
       }
 
@@ -151,7 +151,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
+      redirectTo: window.location.origin + '/update-password',
     });
     if (error) throw error;
   };
