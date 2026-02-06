@@ -22,86 +22,103 @@ const UpdatePassword = () => {
         const restoreSession = async () => {
             console.log('[UpdatePassword] Iniciando restauración de sesión...');
 
-            // Primero verificar si ya hay una sesión activa (por si Supabase ya la procesó)
-            const { data: { session: existingSession } } = await supabase.auth.getSession();
-            if (existingSession) {
-                console.log('[UpdatePassword] Sesión existente detectada');
-                if (mounted) {
-                    setSessionReady(true);
-                    setRestoringSession(false);
+            try {
+                // Primero verificar si ya hay una sesión activa
+                const { data: { session: existingSession } } = await supabase.auth.getSession();
+                if (existingSession) {
+                    console.log('[UpdatePassword] Sesión existente detectada');
+                    if (mounted) {
+                        setSessionReady(true);
+                        setRestoringSession(false);
+                    }
+                    return;
                 }
-                return;
-            }
 
-            // Intentar restaurar desde sessionStorage
-            const savedUrl = sessionStorage.getItem('supabase_recovery_url');
-            const savedHash = sessionStorage.getItem('supabase_recovery_hash');
+                // Intentar restaurar desde sessionStorage
+                const savedUrl = sessionStorage.getItem('supabase_recovery_url');
+                const savedHash = sessionStorage.getItem('supabase_recovery_hash');
 
-            console.log('[UpdatePassword] savedUrl:', savedUrl);
-            console.log('[UpdatePassword] savedHash:', savedHash);
+                console.log('[UpdatePassword] savedUrl:', savedUrl?.substring(0, 50) + '...');
+                console.log('[UpdatePassword] savedHash:', savedHash?.substring(0, 50) + '...');
 
-            if (savedUrl || savedHash) {
-                console.log('[UpdatePassword] Restaurando sesión desde datos guardados');
-                sessionStorage.removeItem('supabase_recovery_url');
-                sessionStorage.removeItem('supabase_recovery_hash');
+                if (savedUrl || savedHash) {
+                    console.log('[UpdatePassword] Restaurando sesión desde datos guardados');
+                    // Limpiar sessionStorage inmediatamente
+                    sessionStorage.removeItem('supabase_recovery_url');
+                    sessionStorage.removeItem('supabase_recovery_hash');
 
-                const sourceString = savedUrl || savedHash || '';
+                    const sourceString = savedUrl || savedHash || '';
 
-                // Buscar access_token y refresh_token
-                const accessTokenMatch = sourceString.match(/access_token=([^&#]+)/);
-                const refreshTokenMatch = sourceString.match(/refresh_token=([^&#]+)/);
+                    // Buscar access_token y refresh_token
+                    const accessTokenMatch = sourceString.match(/access_token=([^&#]+)/);
+                    const refreshTokenMatch = sourceString.match(/refresh_token=([^&#]+)/);
 
-                const accessToken = accessTokenMatch ? accessTokenMatch[1] : null;
-                const refreshToken = refreshTokenMatch ? refreshTokenMatch[1] : null;
+                    const accessToken = accessTokenMatch ? accessTokenMatch[1] : null;
+                    const refreshToken = refreshTokenMatch ? refreshTokenMatch[1] : null;
 
-                console.log('[UpdatePassword] Access token encontrado:', accessToken ? 'Sí' : 'No');
-                console.log('[UpdatePassword] Refresh token encontrado:', refreshToken ? 'Sí' : 'No');
+                    console.log('[UpdatePassword] Access token encontrado:', accessToken ? 'Sí' : 'No');
+                    console.log('[UpdatePassword] Refresh token encontrado:', refreshToken ? 'Sí' : 'No');
 
-                if (accessToken) {
-                    try {
-                        const { data, error } = await supabase.auth.setSession({
+                    if (accessToken) {
+                        console.log('[UpdatePassword] Llamando a setSession...');
+                        const { data, error: sessionError } = await supabase.auth.setSession({
                             access_token: accessToken,
                             refresh_token: refreshToken || ''
                         });
-                        if (error) {
-                            console.error('[UpdatePassword] Error al restaurar sesión:', error);
-                            if (mounted) setError('El enlace de recuperación ha expirado. Por favor solicita uno nuevo.');
-                        } else {
-                            console.log('[UpdatePassword] Sesión restaurada exitosamente:', data.session ? 'Sí' : 'No');
-                            if (mounted) setSessionReady(true);
+
+                        if (sessionError) {
+                            console.error('[UpdatePassword] Error al restaurar sesión:', sessionError);
+                            if (mounted) {
+                                setError('El enlace de recuperación ha expirado o es inválido. Por favor solicita uno nuevo.');
+                                setRestoringSession(false);
+                            }
+                            return;
                         }
-                    } catch (err) {
-                        console.error('[UpdatePassword] Excepción al restaurar sesión:', err);
-                        if (mounted) setError('Error al verificar el enlace de recuperación.');
+
+                        if (data.session) {
+                            console.log('[UpdatePassword] ✅ Sesión restaurada exitosamente');
+                            if (mounted) {
+                                setSessionReady(true);
+                                setRestoringSession(false);
+                            }
+                            return;
+                        } else {
+                            console.error('[UpdatePassword] setSession no retornó sesión');
+                            if (mounted) {
+                                setError('No se pudo establecer la sesión. Por favor solicita un nuevo enlace.');
+                                setRestoringSession(false);
+                            }
+                            return;
+                        }
+                    } else {
+                        console.warn('[UpdatePassword] No se encontró access_token en los datos guardados');
+                        if (mounted) {
+                            setError('El enlace de recuperación es inválido. Por favor solicita uno nuevo.');
+                            setRestoringSession(false);
+                        }
+                        return;
                     }
                 } else {
-                    console.warn('[UpdatePassword] No se encontró access_token en los datos guardados');
-                    // Mostrar formulario de todas formas, el usuario puede que tenga sesión por otro medio
-                    if (mounted) setSessionReady(true);
+                    console.log('[UpdatePassword] No hay datos guardados en sessionStorage');
+                    if (mounted) {
+                        setError('No se encontró información de recuperación. Por favor solicita un nuevo enlace de recuperación.');
+                        setRestoringSession(false);
+                    }
+                    return;
                 }
-            } else {
-                console.log('[UpdatePassword] No hay datos guardados en sessionStorage');
-                // Si no hay datos guardados, verificar si llegamos aquí por otro medio
-                if (mounted) setSessionReady(true);
+            } catch (err) {
+                console.error('[UpdatePassword] Excepción durante restauración:', err);
+                if (mounted) {
+                    setError('Error inesperado al verificar el enlace. Por favor intenta nuevamente.');
+                    setRestoringSession(false);
+                }
             }
-
-            if (mounted) setRestoringSession(false);
         };
-
-        // Timeout de seguridad: si después de 5 segundos no termina, mostrar el formulario
-        const timeoutId = setTimeout(() => {
-            console.warn('[UpdatePassword] Timeout alcanzado, mostrando formulario de todas formas');
-            if (mounted) {
-                setRestoringSession(false);
-                setSessionReady(true);
-            }
-        }, 5000);
 
         restoreSession();
 
         return () => {
             mounted = false;
-            clearTimeout(timeoutId);
         };
     }, []);
 
