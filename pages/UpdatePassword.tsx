@@ -1,138 +1,64 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabase';
-import { Lock, Eye, EyeOff, Save, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Lock, Eye, EyeOff, Save, ShieldCheck, AlertCircle, ArrowLeft } from 'lucide-react';
 
 const UpdatePassword = () => {
-    const { updatePassword } = useAuth();
     const navigate = useNavigate();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [restoringSession, setRestoringSession] = useState(true);
+    const [checkingSession, setCheckingSession] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [sessionReady, setSessionReady] = useState(false);
+    const [hasValidSession, setHasValidSession] = useState(false);
 
-    // Restaurar sesión desde el hash guardado por index.tsx o verificar sesión existente
+    // Verificar si hay una sesión válida para actualizar contraseña
     useEffect(() => {
         let mounted = true;
-        let timeoutId: ReturnType<typeof setTimeout>;
 
-        const restoreSession = async () => {
-            console.log('[UpdatePassword] Iniciando restauración de sesión...');
+        const checkSession = async () => {
+            console.log('[UpdatePassword] Verificando sesión...');
+
+            // Dar tiempo a Supabase para procesar los tokens del hash
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             try {
-                // Primero verificar si ya hay una sesión activa
-                const { data: { session: existingSession } } = await supabase.auth.getSession();
-                if (existingSession) {
-                    console.log('[UpdatePassword] Sesión existente detectada');
+                const { data: { session } } = await supabase.auth.getSession();
+
+                if (session) {
+                    console.log('[UpdatePassword] ✅ Sesión válida encontrada');
                     if (mounted) {
-                        setSessionReady(true);
-                        setRestoringSession(false);
-                    }
-                    return;
-                }
-
-                // Intentar restaurar desde sessionStorage
-                const savedUrl = sessionStorage.getItem('supabase_recovery_url');
-                const savedHash = sessionStorage.getItem('supabase_recovery_hash');
-
-                console.log('[UpdatePassword] savedUrl:', savedUrl ? savedUrl.substring(0, 80) + '...' : 'null');
-                console.log('[UpdatePassword] savedHash:', savedHash ? savedHash.substring(0, 80) + '...' : 'null');
-
-                if (savedUrl || savedHash) {
-                    console.log('[UpdatePassword] Restaurando sesión desde datos guardados');
-                    // Limpiar sessionStorage inmediatamente
-                    sessionStorage.removeItem('supabase_recovery_url');
-                    sessionStorage.removeItem('supabase_recovery_hash');
-
-                    const sourceString = savedUrl || savedHash || '';
-
-                    // Buscar access_token y refresh_token
-                    const accessTokenMatch = sourceString.match(/access_token=([^&#]+)/);
-                    const refreshTokenMatch = sourceString.match(/refresh_token=([^&#]+)/);
-
-                    const accessToken = accessTokenMatch ? accessTokenMatch[1] : null;
-                    const refreshToken = refreshTokenMatch ? refreshTokenMatch[1] : null;
-
-                    console.log('[UpdatePassword] Access token encontrado:', accessToken ? 'Sí' : 'No');
-                    console.log('[UpdatePassword] Refresh token encontrado:', refreshToken ? 'Sí' : 'No');
-
-                    if (accessToken) {
-                        console.log('[UpdatePassword] Llamando a setSession...');
-
-                        // Usar Promise.race con timeout para evitar bloqueo infinito
-                        const setSessionPromise = supabase.auth.setSession({
-                            access_token: accessToken,
-                            refresh_token: refreshToken || ''
-                        });
-
-                        const timeoutPromise = new Promise<{ data: { session: null }, error: Error }>((resolve) => {
-                            timeoutId = setTimeout(() => {
-                                console.warn('[UpdatePassword] Timeout de 10s alcanzado en setSession');
-                                resolve({ data: { session: null }, error: new Error('Timeout: La restauración de sesión tardó demasiado') });
-                            }, 10000);
-                        });
-
-                        const result = await Promise.race([setSessionPromise, timeoutPromise]);
-                        clearTimeout(timeoutId);
-
-                        if (result.error) {
-                            console.error('[UpdatePassword] Error al restaurar sesión:', result.error);
-                            if (mounted) {
-                                setError('El enlace de recuperación ha expirado o es inválido. Por favor solicita uno nuevo.');
-                                setRestoringSession(false);
-                            }
-                            return;
-                        }
-
-                        if (result.data.session) {
-                            console.log('[UpdatePassword] ✅ Sesión restaurada exitosamente');
-                            if (mounted) {
-                                setSessionReady(true);
-                                setRestoringSession(false);
-                            }
-                            return;
-                        } else {
-                            console.error('[UpdatePassword] setSession no retornó sesión');
-                            if (mounted) {
-                                setError('No se pudo establecer la sesión. Por favor solicita un nuevo enlace.');
-                                setRestoringSession(false);
-                            }
-                            return;
-                        }
-                    } else {
-                        console.warn('[UpdatePassword] No se encontró access_token en los datos guardados');
-                        if (mounted) {
-                            setError('El enlace de recuperación es inválido. Por favor solicita uno nuevo.');
-                            setRestoringSession(false);
-                        }
-                        return;
+                        setHasValidSession(true);
+                        setCheckingSession(false);
                     }
                 } else {
-                    console.log('[UpdatePassword] No hay datos guardados en sessionStorage');
-                    if (mounted) {
-                        setError('No se encontró información de recuperación. Por favor solicita un nuevo enlace de recuperación.');
-                        setRestoringSession(false);
+                    console.log('[UpdatePassword] ❌ No hay sesión activa');
+                    // Verificar si hay un flag de recuperación pendiente
+                    const pendingRecovery = sessionStorage.getItem('pending_password_recovery');
+                    if (pendingRecovery) {
+                        sessionStorage.removeItem('pending_password_recovery');
+                        console.log('[UpdatePassword] Había recuperación pendiente pero no se estableció sesión');
                     }
-                    return;
+
+                    if (mounted) {
+                        setError('No se encontró una sesión activa. Por favor solicita un nuevo enlace de recuperación.');
+                        setCheckingSession(false);
+                    }
                 }
             } catch (err) {
-                console.error('[UpdatePassword] Excepción durante restauración:', err);
+                console.error('[UpdatePassword] Error al verificar sesión:', err);
                 if (mounted) {
-                    setError('Error inesperado al verificar el enlace. Por favor intenta nuevamente.');
-                    setRestoringSession(false);
+                    setError('Error al verificar la sesión. Por favor intenta nuevamente.');
+                    setCheckingSession(false);
                 }
             }
         };
 
-        restoreSession();
+        checkSession();
 
         return () => {
             mounted = false;
-            if (timeoutId) clearTimeout(timeoutId);
         };
     }, []);
 
@@ -140,11 +66,12 @@ const UpdatePassword = () => {
         e.preventDefault();
         setError(null);
 
-        // Validación simple
+        // Validación
         if (password !== confirmPassword) {
             setError("Las contraseñas no coinciden.");
             return;
         }
+
         const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
         if (!passwordRegex.test(password)) {
             setError("La contraseña debe tener 8+ caracteres, mayúscula, número y símbolo.");
@@ -152,34 +79,22 @@ const UpdatePassword = () => {
         }
 
         setLoading(true);
-        console.log('[UpdatePassword] Iniciando actualización de contraseña...');
+        console.log('[UpdatePassword] Actualizando contraseña...');
 
         try {
-            // Verificar que hay sesión activa antes de intentar actualizar
-            const { data: { session } } = await supabase.auth.getSession();
-            console.log('[UpdatePassword] Sesión actual:', session ? 'Activa' : 'No existe');
-
-            if (!session) {
-                setError("No hay sesión activa. El enlace de recuperación puede haber expirado. Por favor solicita uno nuevo.");
-                setLoading(false);
-                return;
-            }
-
-            // Llamar directamente a Supabase con timeout
-            const updatePromise = supabase.auth.updateUser({ password });
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Timeout: La operación tardó demasiado')), 15000)
-            );
-
-            const { error: updateError } = await Promise.race([updatePromise, timeoutPromise]) as any;
+            const { error: updateError } = await supabase.auth.updateUser({ password });
 
             if (updateError) {
-                console.error('[UpdatePassword] Error al actualizar:', updateError);
+                console.error('[UpdatePassword] Error:', updateError);
                 throw updateError;
             }
 
-            console.log('[UpdatePassword] Contraseña actualizada exitosamente');
-            alert("Contraseña actualizada con éxito.");
+            console.log('[UpdatePassword] ✅ Contraseña actualizada exitosamente');
+
+            // Cerrar sesión para que el usuario inicie con la nueva contraseña
+            await supabase.auth.signOut();
+
+            alert("¡Contraseña actualizada con éxito! Por favor inicia sesión con tu nueva contraseña.");
             navigate('/login');
         } catch (err: any) {
             console.error('[UpdatePassword] Excepción:', err);
@@ -189,7 +104,11 @@ const UpdatePassword = () => {
         }
     };
 
-    if (restoringSession) {
+    const handleBackToLogin = () => {
+        navigate('/login');
+    };
+
+    if (checkingSession) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 px-4">
                 <div className="text-center">
@@ -216,65 +135,90 @@ const UpdatePassword = () => {
                 {error && (
                     <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded flex items-start gap-3">
                         <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+                        <div>
+                            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+                            {!hasValidSession && (
+                                <button
+                                    onClick={handleBackToLogin}
+                                    className="mt-2 text-sm text-red-600 dark:text-red-400 underline hover:no-underline"
+                                >
+                                    Volver al inicio de sesión
+                                </button>
+                            )}
+                        </div>
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="space-y-2">
-                        <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Nueva Contraseña</label>
-                        <div className="relative">
-                            <input
-                                type={showPassword ? "text" : "password"}
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full h-12 px-4 pr-12 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-slate-900 dark:text-white"
-                                placeholder="••••••••"
-                                required
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                                tabIndex={-1}
-                            >
-                                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                            </button>
+                {hasValidSession ? (
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Nueva Contraseña</label>
+                            <div className="relative">
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full h-12 px-4 pr-12 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-slate-900 dark:text-white"
+                                    placeholder="••••••••"
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                                    tabIndex={-1}
+                                >
+                                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                </button>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                                Mínimo 8 caracteres, una mayúscula, un número y un símbolo
+                            </p>
                         </div>
-                    </div>
 
-                    <div className="space-y-2">
-                        <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Confirmar Contraseña</label>
-                        <div className="relative">
-                            <span className="absolute left-4 top-3.5 text-slate-400">
-                                <Lock className="w-5 h-5" />
-                            </span>
-                            <input
-                                type="password"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="w-full h-12 pl-11 pr-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-slate-900 dark:text-white"
-                                placeholder="••••••••"
-                                required
-                            />
+                        <div className="space-y-2">
+                            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Confirmar Contraseña</label>
+                            <div className="relative">
+                                <span className="absolute left-4 top-3.5 text-slate-400">
+                                    <Lock className="w-5 h-5" />
+                                </span>
+                                <input
+                                    type="password"
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    className="w-full h-12 pl-11 pr-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-slate-900 dark:text-white"
+                                    placeholder="••••••••"
+                                    required
+                                />
+                            </div>
                         </div>
-                    </div>
 
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full h-12 bg-primary hover:bg-blue-600 text-white font-bold rounded-lg shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                        {loading ? (
-                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        ) : (
-                            <>
-                                <Save className="w-4 h-4" />
-                                Actualizar Contraseña
-                            </>
-                        )}
-                    </button>
-                </form>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full h-12 bg-primary hover:bg-blue-600 text-white font-bold rounded-lg shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                        >
+                            {loading ? (
+                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            ) : (
+                                <>
+                                    <Save className="w-4 h-4" />
+                                    Actualizar Contraseña
+                                </>
+                            )}
+                        </button>
+                    </form>
+                ) : (
+                    <div className="text-center">
+                        <button
+                            onClick={handleBackToLogin}
+                            className="inline-flex items-center gap-2 text-primary hover:underline"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            Volver al inicio de sesión
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );

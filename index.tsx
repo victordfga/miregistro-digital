@@ -3,43 +3,27 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 
 // ============================================================================
-// INTERCEPTOR DE RECUPERACIÓN DE CONTRASEÑA (ANTES DE REACT/HASHROUTER)
+// MANEJO DE RECUPERACIÓN DE CONTRASEÑA
 // ============================================================================
 // Supabase envía enlaces como: site.com/#access_token=...&type=recovery
-// HashRouter espera: site.com/#/ruta
-// Esto causa un conflicto. Debemos interceptar ANTES de que React se monte.
+// El cliente de Supabase detectará automáticamente estos tokens y emitirá
+// el evento PASSWORD_RECOVERY. NO debemos modificar el hash antes de que
+// Supabase lo procese.
 // ============================================================================
 
-const fullUrl = window.location.href;
 const hash = window.location.hash;
-const search = window.location.search;
-
-console.log('[Recovery Interceptor] URL completa:', fullUrl);
-
-// Detectar tokens de Supabase en CUALQUIER parte de la URL
-const hasRecoveryTokens =
-  fullUrl.includes('access_token=') ||
-  fullUrl.includes('type=recovery') ||
-  hash.includes('access_token=') ||
-  hash.includes('type=recovery') ||
-  search.includes('access_token=') ||
-  search.includes('type=recovery');
 
 // Detectar si es un enlace de recuperación de Supabase
-if (hasRecoveryTokens) {
-  console.log('[Recovery Interceptor] ¡DETECTADO enlace de recuperación!');
+const isRecoveryLink = hash.includes('access_token=') && hash.includes('type=recovery');
 
-  // Guardar la URL completa para procesamiento posterior
-  sessionStorage.setItem('supabase_recovery_url', fullUrl);
-  sessionStorage.setItem('supabase_recovery_hash', hash || search);
-
-  // Cambiar el hash ANTES de montar React para que HashRouter lo detecte correctamente
-  window.history.replaceState(null, '', window.location.origin + window.location.pathname + '#/update-password');
-
-  console.log('[Recovery Interceptor] Hash cambiado a #/update-password, montando React...');
+if (isRecoveryLink) {
+  console.log('[Recovery] Enlace de recuperación detectado');
+  console.log('[Recovery] Supabase procesará los tokens automáticamente');
+  // Guardamos un flag para saber que estamos en flujo de recuperación
+  sessionStorage.setItem('pending_password_recovery', 'true');
 }
 
-// SIEMPRE montar React - el componente UpdatePassword manejará la restauración de sesión
+// Montar React - Supabase procesará el hash automáticamente
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
