@@ -18,6 +18,7 @@ const UpdatePassword = () => {
     // Restaurar sesión desde el hash guardado por index.tsx o verificar sesión existente
     useEffect(() => {
         let mounted = true;
+        let timeoutId: ReturnType<typeof setTimeout>;
 
         const restoreSession = async () => {
             console.log('[UpdatePassword] Iniciando restauración de sesión...');
@@ -38,8 +39,8 @@ const UpdatePassword = () => {
                 const savedUrl = sessionStorage.getItem('supabase_recovery_url');
                 const savedHash = sessionStorage.getItem('supabase_recovery_hash');
 
-                console.log('[UpdatePassword] savedUrl:', savedUrl?.substring(0, 50) + '...');
-                console.log('[UpdatePassword] savedHash:', savedHash?.substring(0, 50) + '...');
+                console.log('[UpdatePassword] savedUrl:', savedUrl ? savedUrl.substring(0, 80) + '...' : 'null');
+                console.log('[UpdatePassword] savedHash:', savedHash ? savedHash.substring(0, 80) + '...' : 'null');
 
                 if (savedUrl || savedHash) {
                     console.log('[UpdatePassword] Restaurando sesión desde datos guardados');
@@ -61,13 +62,25 @@ const UpdatePassword = () => {
 
                     if (accessToken) {
                         console.log('[UpdatePassword] Llamando a setSession...');
-                        const { data, error: sessionError } = await supabase.auth.setSession({
+
+                        // Usar Promise.race con timeout para evitar bloqueo infinito
+                        const setSessionPromise = supabase.auth.setSession({
                             access_token: accessToken,
                             refresh_token: refreshToken || ''
                         });
 
-                        if (sessionError) {
-                            console.error('[UpdatePassword] Error al restaurar sesión:', sessionError);
+                        const timeoutPromise = new Promise<{ data: { session: null }, error: Error }>((resolve) => {
+                            timeoutId = setTimeout(() => {
+                                console.warn('[UpdatePassword] Timeout de 10s alcanzado en setSession');
+                                resolve({ data: { session: null }, error: new Error('Timeout: La restauración de sesión tardó demasiado') });
+                            }, 10000);
+                        });
+
+                        const result = await Promise.race([setSessionPromise, timeoutPromise]);
+                        clearTimeout(timeoutId);
+
+                        if (result.error) {
+                            console.error('[UpdatePassword] Error al restaurar sesión:', result.error);
                             if (mounted) {
                                 setError('El enlace de recuperación ha expirado o es inválido. Por favor solicita uno nuevo.');
                                 setRestoringSession(false);
@@ -75,7 +88,7 @@ const UpdatePassword = () => {
                             return;
                         }
 
-                        if (data.session) {
+                        if (result.data.session) {
                             console.log('[UpdatePassword] ✅ Sesión restaurada exitosamente');
                             if (mounted) {
                                 setSessionReady(true);
@@ -119,6 +132,7 @@ const UpdatePassword = () => {
 
         return () => {
             mounted = false;
+            if (timeoutId) clearTimeout(timeoutId);
         };
     }, []);
 
