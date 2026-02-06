@@ -16,6 +16,7 @@ const UpdatePassword = () => {
     // Restaurar sesión usando los tokens guardados por el interceptor
     useEffect(() => {
         let mounted = true;
+        let timeoutId: ReturnType<typeof setTimeout>;
 
         const restoreSession = async () => {
             console.log('[UpdatePassword] Iniciando restauración de sesión...');
@@ -37,23 +38,49 @@ const UpdatePassword = () => {
                 const refreshToken = sessionStorage.getItem('recovery_refresh_token');
                 const pendingRecovery = sessionStorage.getItem('recovery_pending');
 
-                console.log('[UpdatePassword] Tokens guardados:', accessToken ? 'Sí' : 'No');
+                console.log('[UpdatePassword] Tokens en sessionStorage:', accessToken ? 'Sí' : 'No');
+                console.log('[UpdatePassword] Recovery pending:', pendingRecovery ? 'Sí' : 'No');
 
                 if (accessToken && pendingRecovery) {
-                    // Limpiar sessionStorage
+                    // Limpiar sessionStorage ANTES de intentar setSession
                     sessionStorage.removeItem('recovery_access_token');
                     sessionStorage.removeItem('recovery_refresh_token');
                     sessionStorage.removeItem('recovery_pending');
 
-                    console.log('[UpdatePassword] Restaurando sesión con tokens...');
+                    console.log('[UpdatePassword] Llamando a setSession (con timeout de 8s)...');
 
-                    const { data, error: sessionError } = await supabase.auth.setSession({
+                    // Usar Promise.race con timeout para evitar bloqueo infinito
+                    const setSessionPromise = supabase.auth.setSession({
                         access_token: accessToken,
                         refresh_token: refreshToken || ''
                     });
 
-                    if (sessionError) {
-                        console.error('[UpdatePassword] Error al restaurar sesión:', sessionError);
+                    const timeoutPromise = new Promise<{ data: { session: null }, error: Error }>((resolve) => {
+                        timeoutId = setTimeout(() => {
+                            console.warn('[UpdatePassword] ⚠️ Timeout de 8s alcanzado en setSession');
+                            resolve({
+                                data: { session: null },
+                                error: new Error('La verificación tardó demasiado. Intenta actualizar la contraseña de todos modos.')
+                            });
+                        }, 8000);
+                    });
+
+                    const result = await Promise.race([setSessionPromise, timeoutPromise]);
+                    clearTimeout(timeoutId);
+
+                    if (result.error && result.error.message.includes('tardó demasiado')) {
+                        // Timeout - mostrar formulario con advertencia pero permitir intentar
+                        console.warn('[UpdatePassword] Timeout - mostrando formulario de todas formas');
+                        if (mounted) {
+                            setError('La verificación tardó demasiado. Puedes intentar actualizar tu contraseña de todos modos.');
+                            setSessionReady(true); // Mostrar el formulario
+                            setRestoringSession(false);
+                        }
+                        return;
+                    }
+
+                    if (result.error) {
+                        console.error('[UpdatePassword] Error al restaurar sesión:', result.error);
                         if (mounted) {
                             setError('El enlace de recuperación ha expirado o es inválido. Por favor solicita uno nuevo.');
                             setRestoringSession(false);
@@ -61,7 +88,7 @@ const UpdatePassword = () => {
                         return;
                     }
 
-                    if (data.session) {
+                    if (result.data.session) {
                         console.log('[UpdatePassword] ✅ Sesión restaurada exitosamente');
                         if (mounted) {
                             setSessionReady(true);
@@ -96,6 +123,7 @@ const UpdatePassword = () => {
 
         return () => {
             mounted = false;
+            if (timeoutId) clearTimeout(timeoutId);
         };
     }, []);
 
