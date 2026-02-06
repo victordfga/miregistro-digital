@@ -147,21 +147,52 @@ const UpdatePassword = () => {
         console.log('[UpdatePassword] Actualizando contraseña...');
 
         try {
-            // Verificar sesión antes de actualizar
-            const { data: { session } } = await supabase.auth.getSession();
-            console.log('[UpdatePassword] Sesión actual:', session ? 'Activa' : 'No existe');
+            // Verificar sesión con timeout
+            console.log('[UpdatePassword] Verificando sesión...');
+            const sessionPromise = supabase.auth.getSession();
+            const sessionTimeout = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout verificando sesión')), 5000)
+            );
 
-            if (!session) {
-                setError("No hay sesión activa. Por favor solicita un nuevo enlace.");
+            let session;
+            try {
+                const result = await Promise.race([sessionPromise, sessionTimeout]) as any;
+                session = result.data?.session;
+            } catch (timeoutErr) {
+                console.error('[UpdatePassword] Timeout al verificar sesión');
+                setError("La verificación de sesión tardó demasiado. Intenta nuevamente.");
                 setLoading(false);
                 return;
             }
 
-            const { error: updateError } = await supabase.auth.updateUser({ password });
+            console.log('[UpdatePassword] Sesión:', session ? 'Activa' : 'No existe');
 
-            if (updateError) {
-                console.error('[UpdatePassword] Error:', updateError);
-                throw updateError;
+            if (!session) {
+                setError("No hay sesión activa. El enlace puede haber expirado. Por favor solicita uno nuevo.");
+                setLoading(false);
+                return;
+            }
+
+            // Actualizar contraseña con timeout
+            console.log('[UpdatePassword] Llamando a updateUser...');
+            const updatePromise = supabase.auth.updateUser({ password });
+            const updateTimeout = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout actualizando contraseña')), 10000)
+            );
+
+            let updateResult;
+            try {
+                updateResult = await Promise.race([updatePromise, updateTimeout]) as any;
+            } catch (timeoutErr) {
+                console.error('[UpdatePassword] Timeout al actualizar contraseña');
+                setError("La actualización tardó demasiado. Intenta nuevamente.");
+                setLoading(false);
+                return;
+            }
+
+            if (updateResult.error) {
+                console.error('[UpdatePassword] Error:', updateResult.error);
+                throw updateResult.error;
             }
 
             console.log('[UpdatePassword] ✅ Contraseña actualizada exitosamente');
